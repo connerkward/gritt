@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head><title>Test Color Picker MCP App</title></head>
+<body style="margin:0;background:#222;color:#fff;font-family:sans-serif;padding:20px;">
+<h2 id="status">Loading app...</h2>
+<div style="width:900px;height:650px;border:2px solid #555;">
+  <iframe id="app" style="width:100%;height:100%;border:none;"></iframe>
+</div>
+<script>
+const iframe = document.getElementById('app');
+const status = document.getElementById('status');
+
+// Generate a LARGE PNG image to simulate what Claude Desktop actually sends
+function makeTestImage() {
+  const c = document.createElement('canvas');
+  c.width = 3000; c.height = 2000;
+  const ctx = c.getContext('2d');
+  const grad = ctx.createLinearGradient(0,0,3000,2000);
+  grad.addColorStop(0, '#8B4513');
+  grad.addColorStop(0.3, '#A0522D');
+  grad.addColorStop(0.6, '#D2691E');
+  grad.addColorStop(1, '#CD853F');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,3000,2000);
+  // Per-pixel noise to prevent PNG compression
+  const imgData = ctx.getImageData(0,0,3000,2000);
+  const d = imgData.data;
+  for(let i=0; i<d.length; i+=4){
+    d[i]   += (Math.random()*60-30)|0;
+    d[i+1] += (Math.random()*40-20)|0;
+    d[i+2] += (Math.random()*30-15)|0;
+  }
+  ctx.putImageData(imgData, 0, 0);
+  for(let i=0;i<30;i++){
+    const grad2 = ctx.createRadialGradient(Math.random()*3000, Math.random()*2000, 0, Math.random()*3000, Math.random()*2000, 300);
+    grad2.addColorStop(0, `rgba(${Math.random()*255|0},${Math.random()*150|0},${Math.random()*100|0},0.4)`);
+    grad2.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad2;
+    ctx.fillRect(0,0,3000,2000);
+  }
+  return c;
+}
+
+// Simulate server-side compression (what server.ts does with sharp)
+function compressImage(canvas) {
+  const small = document.createElement('canvas');
+  const maxDim = 1200;
+  let w = canvas.width, h = canvas.height;
+  if (w > maxDim || h > maxDim) {
+    const scale = maxDim / Math.max(w, h);
+    w = Math.round(w * scale);
+    h = Math.round(h * scale);
+  }
+  small.width = w; small.height = h;
+  small.getContext('2d').drawImage(canvas, 0, 0, w, h);
+  return small.toDataURL('image/jpeg', 0.80).split(',')[1];
+}
+
+fetch('/dist/mcp-app.html').then(r => r.text()).then(html => {
+  iframe.srcdoc = html;
+  status.textContent = 'App loaded, waiting for init...';
+
+  window.addEventListener('message', (e) => {
+    const msg = e.data;
+    if (!msg || !msg.jsonrpc) return;
+    console.log('[HOST] <-', msg.method || ('response id=' + msg.id));
+
+    if (msg.method === 'ui/initialize') {
+      status.textContent = 'App connected!';
+      iframe.contentWindow.postMessage({
+        jsonrpc: '2.0',
+        id: msg.id,
+        result: {
+          protocolVersion: '2025-11-21',
+          hostInfo: { name: 'test-harness', version: '1.0.0' },
+          hostCapabilities: { serverTools: { listChanged: false } },
+          hostContext: { theme: 'dark' }
+        }
+      }, '*');
+
+      setTimeout(() => {
+        const t0 = performance.now();
+        status.textContent = 'Generating large test image...';
+        const canvas = makeTestImage();
+
+        // Get raw PNG base64 (huge — what ontoolinput would receive)
+        const rawB64 = canvas.toDataURL('image/png').split(',')[1];
+        const rawMB = (rawB64.length/1024/1024).toFixed(1);
+        console.log(`[TEST] Raw PNG: ${rawMB}MB`);
+
+        // Send ontoolinput with RAW data (simulates Claude Desktop)
+        iframe.contentWindow.postMessage({
+          jsonrpc: '2.0',
+          method: 'ui/notifications/tool-input',
+          params: { arguments: { image_base64: rawB64 } }
+        }, '*');
+        status.textContent = `Sent raw input (${rawMB}MB). Compressing for tool-result...`;
+
+        // Simulate server compression delay (sharp takes ~200ms), then send ontoolresult
+        const compT0 = performance.now();
+        const compressedB64 = compressImage(canvas);
+        const compKB = (compressedB64.length/1024).toFixed(0);
+        const compMs = (performance.now() - compT0).toFixed(0);
+        console.log(`[TEST] Compressed JPEG: ${compKB}KB in ${compMs}ms`);
+
+        // Test mode: simulate BOTH paths
+        // A) Compressed ontoolresult (normal path)
+        // B) Comment out below to test raw-only fallback (3s timeout)
+        setTimeout(() => {
+          iframe.contentWindow.postMessage({
+            jsonrpc: '2.0',
+            method: 'ui/notifications/tool-result',
+            params: {
+              content: [{ type: 'text', text: 'loaded' }],
+              structuredContent: { image_base64: compressedB64 }
+            }
+          }, '*');
+          const totalMs = (performance.now() - t0).toFixed(0);
+          status.textContent = `Done! Raw: ${rawMB}MB → Compressed: ${compKB}KB. Total: ${totalMs}ms. Click/drag to pick.`;
+        }, 500); // Simulate server processing time
+      }, 200);
+    }
+  });
+});
+</script>
+</body>
+</html>
