@@ -63,8 +63,12 @@ h3 { font-family:"Space Mono",monospace; font-size:10px; font-weight:700; color:
 .swatch-pct { font-size:8px; color:#555; transition:opacity 0.15s; }
 .info-cell.disabled .swatch-hex, .info-cell.disabled .swatch-pct { opacity:0.3; text-decoration:line-through; }
 
+.texture-wrap { position:relative; }
 .texture-preview { width:100%; height:100px; border-radius:8px; border:1px solid #2a2a2a; overflow:hidden; }
 .texture-preview canvas { width:100%; height:100%; display:block; }
+.save-btn { position:absolute; top:6px; right:6px; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.15); color:#ccc; padding:3px 8px; border-radius:4px; font:10px "Space Mono",monospace; cursor:pointer; opacity:0; transition:opacity 0.15s; backdrop-filter:blur(4px); }
+.texture-wrap:hover .save-btn { opacity:1; }
+.save-btn:active { background:rgba(255,255,255,0.15); }
 
 .css-previews { display:flex; gap:4px; }
 .css-prev { flex:1; height:44px; border-radius:6px; border:1px solid #2a2a2a; cursor:pointer; }
@@ -157,7 +161,7 @@ const pl=sidebar.querySelector(".palette-label");if(pl)pl.textContent=`Palette (
 function renderSidebar(palette){lastPalette=palette;disabledSet=new Set();const enabled=getEnabledPalette();const css=generateCss(enabled);
 sidebar.replaceChildren();sidebar.appendChild(buildControls());
 const tl=document.createElement("h3");tl.textContent="Texture Preview";sidebar.appendChild(tl);
-const tw=document.createElement("div");tw.className="texture-preview";const tc=document.createElement("canvas");tc.width=280;tc.height=100;tw.appendChild(tc);sidebar.appendChild(tw);drawTexturePreview(tc,enabled);
+const twrap=document.createElement("div");twrap.className="texture-wrap";const tw=document.createElement("div");tw.className="texture-preview";const tc=document.createElement("canvas");tc.width=280;tc.height=100;tw.appendChild(tc);const saveBtn=document.createElement("button");saveBtn.className="save-btn";saveBtn.textContent="save";saveBtn.addEventListener("click",()=>{const a=document.createElement("a");a.download="gritt-texture.png";a.href=tc.toDataURL("image/png");a.click();showCopied("texture.png")});twrap.append(tw,saveBtn);sidebar.appendChild(twrap);drawTexturePreview(tc,enabled);
 const pl=document.createElement("h3");pl.className="palette-label";pl.textContent=`Palette (${enabled.length}/${palette.length})`;sidebar.appendChild(pl);
 const pr=document.createElement("div");pr.className="palette";palette.forEach((c,idx)=>{const s=document.createElement("div");s.className="swatch enabled";s.style.background=c.hex;s.title=`Click to toggle\nRight-click to copy\n${c.hex} · HSL(${c.hsl.h},${c.hsl.s}%,${c.hsl.l}%) · ${Math.round(c.weight*100)}%`;s.addEventListener("click",()=>{if(disabledSet.has(idx)){disabledSet.delete(idx);s.classList.remove("disabled");s.classList.add("enabled")}else{if(getEnabledPalette().length<=1)return;disabledSet.add(idx);s.classList.remove("enabled");s.classList.add("disabled")}const ic=sidebar.querySelectorAll(".info-cell")[idx];if(ic)ic.classList.toggle("disabled",disabledSet.has(idx));updateOutputs()});s.addEventListener("contextmenu",e=>{e.preventDefault();navigator.clipboard.writeText(c.hex);showCopied(c.hex)});pr.appendChild(s)});sidebar.appendChild(pr);
 const ir=document.createElement("div");ir.className="info-row";palette.forEach((c)=>{const d=document.createElement("div");d.className="info-cell";const h=document.createElement("div");h.className="swatch-hex";h.textContent=c.hex;const p=document.createElement("div");p.className="swatch-pct";p.textContent=Math.round(c.weight*100)+"%";d.append(h,p);ir.appendChild(d)});sidebar.appendChild(ir);

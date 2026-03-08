@@ -569,6 +569,20 @@ app.ontoolresult = (result) => {
   }
 };
 
+app.ontoolcancelled = (params) => {
+  setStatus(`Tool cancelled: ${params.reason ?? "unknown reason"}`);
+};
+
+app.onteardown = async () => {
+  return {};
+};
+
 setStatus("Connecting to MCP host...");
-app.connect();
-setStatus("Connected, waiting for tool data...");
+(async () => {
+  try {
+    await app.connect();
+    setStatus("Connected, waiting for tool data...");
+  } catch (err) {
+    setStatus(`Connection failed: ${err}`);
+  }
+})();
