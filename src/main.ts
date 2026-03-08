@@ -166,6 +166,14 @@ h3 { font-size:11px; font-weight:600; color:#777; text-transform:uppercase; lett
 .num-display { font-size:10px; color:#999; min-width:14px; }
 .copied { position:fixed; top:12px; right:12px; background:#333; color:#fff; padding:4px 10px; border-radius:4px; font-size:11px; opacity:0; transition:opacity 0.2s; pointer-events:none; z-index:99; }
 .copied.show { opacity:1; }
+.header-bar { display:flex; align-items:center; justify-content:space-between; padding:6px 12px; border-bottom:1px solid #222; flex-shrink:0; }
+.header-bar h1 { font-size:15px; font-weight:700; letter-spacing:0.5px; }
+.header-bar h1 span { color:#666; font-weight:400; font-size:11px; margin-left:4px; }
+.upload-btn { background:#1a1a1a; border:1px solid #333; color:#aaa; padding:5px 12px; border-radius:6px; font-size:11px; cursor:pointer; }
+.upload-btn:hover { background:#252525; border-color:#444; }
+.drop-overlay { position:absolute; inset:0; background:rgba(0,120,214,0.15); border:3px dashed #0078d6; display:none; align-items:center; justify-content:center; z-index:10; pointer-events:none; border-radius:8px; }
+.drop-overlay.active { display:flex; }
+.drop-overlay span { background:#0078d6; color:#fff; padding:6px 16px; border-radius:6px; font-size:12px; }
 `;
 root.appendChild(style);
 
@@ -179,6 +187,22 @@ function setStatus(msg: string) {
   statusBar.textContent = msg;
   console.log("[picker]", msg);
 }
+
+// Header with upload button
+const headerBar = document.createElement("div");
+headerBar.className = "header-bar";
+const h1 = document.createElement("h1");
+h1.innerHTML = 'Gritt <span>color texture picker</span>';
+const uploadLabel = document.createElement("label");
+uploadLabel.className = "upload-btn";
+uploadLabel.textContent = "Upload Image";
+const fileInput = document.createElement("input");
+fileInput.type = "file";
+fileInput.accept = "image/*";
+fileInput.style.display = "none";
+uploadLabel.appendChild(fileInput);
+headerBar.append(h1, uploadLabel);
+root.appendChild(headerBar);
 
 const topRow = document.createElement("div");
 topRow.className = "top";
@@ -196,6 +220,11 @@ selectRect.className = "select-rect";
 selectRect.style.display = "none";
 canvasWrap.appendChild(selectRect);
 
+const dropOverlay = document.createElement("div");
+dropOverlay.className = "drop-overlay";
+dropOverlay.innerHTML = "<span>Drop image here</span>";
+canvasWrap.appendChild(dropOverlay);
+
 const sidebar = document.createElement("div");
 sidebar.className = "sidebar";
 topRow.appendChild(sidebar);
@@ -212,6 +241,44 @@ function showCopied(text: string) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => copiedToast.classList.remove("show"), 1200);
 }
+
+// File upload + drag & drop
+function loadImageFromFile(file: File) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const max = 1200;
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w > max || h > max) {
+        const s = max / Math.max(w, h);
+        w = Math.round(w * s);
+        h = Math.round(h * s);
+      }
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+      ctx.drawImage(img, 0, 0, w, h);
+      fullImageData = ctx.getImageData(0, 0, w, h);
+      setStatus(`Image loaded (${w}x${h})`);
+      showEmptyMsg("Click or drag on the image to pick a color texture");
+    };
+    img.src = reader.result as string;
+  };
+  reader.readAsDataURL(file);
+}
+
+fileInput.addEventListener("change", () => {
+  if (fileInput.files?.[0]) loadImageFromFile(fileInput.files[0]);
+});
+
+canvasWrap.addEventListener("dragover", (e) => { e.preventDefault(); dropOverlay.classList.add("active"); });
+canvasWrap.addEventListener("dragleave", () => dropOverlay.classList.remove("active"));
+canvasWrap.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropOverlay.classList.remove("active");
+  if (e.dataTransfer?.files[0]) loadImageFromFile(e.dataTransfer.files[0]);
+});
 
 // State
 let fullImageData: ImageData | null = null;
@@ -529,44 +596,13 @@ window.addEventListener("mouseup", () => { isDown = false; });
 
 const app = new App({ name: "Gritt", version: "1.0.0" });
 
-let rawInputBase64: string | null = null;
-let loadStarted = false;
-let inputFallbackTimer: ReturnType<typeof setTimeout>;
-
-app.ontoolinput = (params) => {
-  setStatus("ontoolinput received");
-  const args = params.arguments as { image_base64?: string } | undefined;
-  if (args?.image_base64) {
-    rawInputBase64 = args.image_base64;
-    // Wait up to 3s for compressed ontoolresult before using raw input
-    inputFallbackTimer = setTimeout(() => {
-      if (!loadStarted && rawInputBase64) {
-        setStatus("No ontoolresult after 3s — loading raw input...");
-        loadStarted = true;
-        loadImage(rawInputBase64);
-      }
-    }, 3000);
-  } else {
-    setStatus("ontoolinput: no image_base64 in arguments");
-  }
+app.ontoolinput = () => {
+  setStatus("Tool opened — ready for image upload");
+  showEmptyMsg("Click or drag an image onto the canvas to start picking color textures");
 };
 
-app.ontoolresult = (result) => {
-  setStatus("ontoolresult received");
-  clearTimeout(inputFallbackTimer);
-  if (loadStarted) return; // already loading
-  const data = result.structuredContent as { image_base64?: string } | undefined;
-  if (data?.image_base64) {
-    loadStarted = true;
-    loadImage(data.image_base64); // This is the server-compressed version
-  } else if (rawInputBase64) {
-    setStatus("ontoolresult had no image, using raw input...");
-    loadStarted = true;
-    loadImage(rawInputBase64);
-  } else {
-    setStatus("No image data in either ontoolinput or ontoolresult");
-    showEmptyMsg("No image data received. Check that the tool was called with image_base64.");
-  }
+app.ontoolresult = () => {
+  setStatus("Tool result received");
 };
 
 app.ontoolcancelled = (params) => {
@@ -581,7 +617,8 @@ setStatus("Connecting to MCP host...");
 (async () => {
   try {
     await app.connect();
-    setStatus("Connected, waiting for tool data...");
+    setStatus("Connected — upload an image to start");
+    showEmptyMsg("Click or drag an image onto the canvas to start picking color textures");
   } catch (err) {
     setStatus(`Connection failed: ${err}`);
   }
