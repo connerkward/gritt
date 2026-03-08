@@ -51,13 +51,17 @@ h3 { font-family:"Space Mono",monospace; font-size:10px; font-weight:700; color:
 .num-display { font-size:11px; color:#999; min-width:14px; }
 
 .palette { display:flex; gap:3px; flex-wrap:wrap; }
-.swatch { width:40px; height:40px; border-radius:8px; cursor:pointer; transition:transform 0.1s; border:1px solid rgba(255,255,255,0.1); }
+.swatch { width:40px; height:40px; border-radius:8px; cursor:pointer; transition:transform 0.1s, opacity 0.15s; border:2px solid transparent; position:relative; }
 .swatch:active { transform:scale(0.9); }
+.swatch.enabled { border-color:rgba(255,255,255,0.25); }
+.swatch.disabled { opacity:0.3; border-color:transparent; }
+.swatch.disabled::after { content:""; position:absolute; inset:0; border-radius:6px; background:repeating-linear-gradient(135deg,transparent,transparent 3px,rgba(0,0,0,0.4) 3px,rgba(0,0,0,0.4) 5px); }
 
 .info-row { display:flex; gap:2px; flex-wrap:wrap; }
 .info-cell { width:40px; text-align:center; }
-.swatch-hex { font-size:8px; color:#888; }
-.swatch-pct { font-size:8px; color:#555; }
+.swatch-hex { font-size:8px; color:#888; transition:opacity 0.15s; }
+.swatch-pct { font-size:8px; color:#555; transition:opacity 0.15s; }
+.info-cell.disabled .swatch-hex, .info-cell.disabled .swatch-pct { opacity:0.3; text-decoration:line-through; }
 
 .texture-preview { width:100%; height:100px; border-radius:8px; border:1px solid #2a2a2a; overflow:hidden; }
 .texture-preview canvas { width:100%; height:100%; display:block; }
@@ -119,7 +123,7 @@ const sidebar=document.getElementById("sidebar");
 const copiedToast=document.getElementById("copiedToast");
 const dropOverlay=document.getElementById("dropOverlay");
 let fullImageData=null, numColors=6, regionSize=40;
-let toastTimer;
+let toastTimer, lastPalette=null, disabledSet=new Set();
 
 function showCopied(t){copiedToast.textContent=`Copied: ${t}`;copiedToast.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>copiedToast.classList.remove("show"),1200)}
 
@@ -140,19 +144,28 @@ function getCoords(clientX,clientY){const rect=canvas.getBoundingClientRect(),ia
 function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v))}
 
 let rafId=0;
-function analyzeAt(cx,cy){if(!fullImageData)return;cx=clamp(cx,0,fullImageData.width-1);cy=clamp(cy,0,fullImageData.height-1);cancelAnimationFrame(rafId);rafId=requestAnimationFrame(()=>{if(!fullImageData)return;const iw=fullImageData.width,ih=fullImageData.height;const x0=clamp(cx-regionSize,0,iw-1),y0=clamp(cy-regionSize,0,ih-1),x1=clamp(cx+regionSize,0,iw),y1=clamp(cy+regionSize,0,ih),w=x1-x0,h=y1-y0;if(w<1||h<1)return;const cr=canvas.getBoundingClientRect(),ia=canvas.width/canvas.height,ba=cr.width/cr.height;let dw,dh,ox,oy;if(ia>ba){dw=cr.width;dh=cr.width/ia;ox=0;oy=(cr.height-dh)/2}else{dh=cr.height;dw=cr.height*ia;ox=(cr.width-dw)/2;oy=0}const sx=dw/iw,sy=dh/ih;selectRect.style.display="block";selectRect.style.left=`${ox+x0*sx}px`;selectRect.style.top=`${oy+y0*sy}px`;selectRect.style.width=`${w*sx}px`;selectRect.style.height=`${h*sy}px`;const palette=kMeans(fullImageData.data,x0,y0,w,h,iw,numColors);if(!palette.length)return;renderSidebar(palette,generateCss(palette))})}
+function analyzeAt(cx,cy){if(!fullImageData)return;cx=clamp(cx,0,fullImageData.width-1);cy=clamp(cy,0,fullImageData.height-1);cancelAnimationFrame(rafId);rafId=requestAnimationFrame(()=>{if(!fullImageData)return;const iw=fullImageData.width,ih=fullImageData.height;const x0=clamp(cx-regionSize,0,iw-1),y0=clamp(cy-regionSize,0,ih-1),x1=clamp(cx+regionSize,0,iw),y1=clamp(cy+regionSize,0,ih),w=x1-x0,h=y1-y0;if(w<1||h<1)return;const cr=canvas.getBoundingClientRect(),ia=canvas.width/canvas.height,ba=cr.width/cr.height;let dw,dh,ox,oy;if(ia>ba){dw=cr.width;dh=cr.width/ia;ox=0;oy=(cr.height-dh)/2}else{dh=cr.height;dw=cr.height*ia;ox=(cr.width-dw)/2;oy=0}const sx=dw/iw,sy=dh/ih;selectRect.style.display="block";selectRect.style.left=`${ox+x0*sx}px`;selectRect.style.top=`${oy+y0*sy}px`;selectRect.style.width=`${w*sx}px`;selectRect.style.height=`${h*sy}px`;const palette=kMeans(fullImageData.data,x0,y0,w,h,iw,numColors);if(!palette.length)return;renderSidebar(palette)})}
 
-function renderSidebar(palette,css){sidebar.replaceChildren();sidebar.appendChild(buildControls());
+function getEnabledPalette(){if(!lastPalette)return[];return lastPalette.filter((_,i)=>!disabledSet.has(i))}
+
+function updateOutputs(){const enabled=getEnabledPalette();if(!enabled.length)return;const css=generateCss(enabled);
+const tc=sidebar.querySelector(".texture-preview canvas");if(tc)drawTexturePreview(tc,enabled);
+const prevs=sidebar.querySelectorAll(".css-prev");const bgs=[css.gradient,css.noise,`${css.mesh}, ${enabled[0].hex}`];prevs.forEach((pv,i)=>{if(bgs[i])pv.style.background=bgs[i]});
+const blocks=sidebar.querySelectorAll(".css-block");const vals=[["gradient",css.gradient],["noise",css.noise],["mesh",`${css.mesh}, ${enabled[0].hex}`]];blocks.forEach((b,i)=>{if(!vals[i])return;b.textContent=`/* ${vals[i][0]} */\nbackground: ${vals[i][1]};`;b.onclick=()=>{navigator.clipboard.writeText(`background: ${vals[i][1]};`);showCopied(vals[i][0])}});
+const pl=sidebar.querySelector(".palette-label");if(pl)pl.textContent=`Palette (${enabled.length}/${lastPalette.length})`}
+
+function renderSidebar(palette){lastPalette=palette;disabledSet=new Set();const enabled=getEnabledPalette();const css=generateCss(enabled);
+sidebar.replaceChildren();sidebar.appendChild(buildControls());
 const tl=document.createElement("h3");tl.textContent="Texture Preview";sidebar.appendChild(tl);
-const tw=document.createElement("div");tw.className="texture-preview";const tc=document.createElement("canvas");tc.width=280;tc.height=100;tw.appendChild(tc);sidebar.appendChild(tw);drawTexturePreview(tc,palette);
-const pl=document.createElement("h3");pl.textContent=`Palette (${palette.length})`;sidebar.appendChild(pl);
-const pr=document.createElement("div");pr.className="palette";for(const c of palette){const s=document.createElement("div");s.className="swatch";s.style.background=c.hex;s.title=`${c.hex}\nHSL(${c.hsl.h},${c.hsl.s}%,${c.hsl.l}%)\n${Math.round(c.weight*100)}%`;s.addEventListener("click",()=>{navigator.clipboard.writeText(c.hex);showCopied(c.hex)});pr.appendChild(s)}sidebar.appendChild(pr);
-const ir=document.createElement("div");ir.className="info-row";for(const c of palette){const d=document.createElement("div");d.className="info-cell";const h=document.createElement("div");h.className="swatch-hex";h.textContent=c.hex;const p=document.createElement("div");p.className="swatch-pct";p.textContent=Math.round(c.weight*100)+"%";d.append(h,p);ir.appendChild(d)}sidebar.appendChild(ir);
+const tw=document.createElement("div");tw.className="texture-preview";const tc=document.createElement("canvas");tc.width=280;tc.height=100;tw.appendChild(tc);sidebar.appendChild(tw);drawTexturePreview(tc,enabled);
+const pl=document.createElement("h3");pl.className="palette-label";pl.textContent=`Palette (${enabled.length}/${palette.length})`;sidebar.appendChild(pl);
+const pr=document.createElement("div");pr.className="palette";palette.forEach((c,idx)=>{const s=document.createElement("div");s.className="swatch enabled";s.style.background=c.hex;s.title=`Click to toggle\nRight-click to copy\n${c.hex} · HSL(${c.hsl.h},${c.hsl.s}%,${c.hsl.l}%) · ${Math.round(c.weight*100)}%`;s.addEventListener("click",()=>{if(disabledSet.has(idx)){disabledSet.delete(idx);s.classList.remove("disabled");s.classList.add("enabled")}else{if(getEnabledPalette().length<=1)return;disabledSet.add(idx);s.classList.remove("enabled");s.classList.add("disabled")}const ic=sidebar.querySelectorAll(".info-cell")[idx];if(ic)ic.classList.toggle("disabled",disabledSet.has(idx));updateOutputs()});s.addEventListener("contextmenu",e=>{e.preventDefault();navigator.clipboard.writeText(c.hex);showCopied(c.hex)});pr.appendChild(s)});sidebar.appendChild(pr);
+const ir=document.createElement("div");ir.className="info-row";palette.forEach((c)=>{const d=document.createElement("div");d.className="info-cell";const h=document.createElement("div");h.className="swatch-hex";h.textContent=c.hex;const p=document.createElement("div");p.className="swatch-pct";p.textContent=Math.round(c.weight*100)+"%";d.append(h,p);ir.appendChild(d)});sidebar.appendChild(ir);
 const cl=document.createElement("h3");cl.textContent="CSS Patterns";sidebar.appendChild(cl);
 const pvr=document.createElement("div");pvr.className="css-previews";
-[["Gradient",css.gradient],["Noise",css.noise],["Mesh",`${css.mesh}, ${palette[0].hex}`]].forEach(([label,bg])=>{const col=document.createElement("div");col.style.flex="1";const pv=document.createElement("div");pv.className="css-prev";pv.style.background=bg;pv.addEventListener("click",()=>{navigator.clipboard.writeText(`background: ${bg};`);showCopied(label)});const lb=document.createElement("div");lb.className="css-prev-label";lb.textContent=label;col.append(pv,lb);pvr.appendChild(col)});sidebar.appendChild(pvr);
+[["Gradient",css.gradient],["Noise",css.noise],["Mesh",`${css.mesh}, ${enabled[0].hex}`]].forEach(([label,bg])=>{const col=document.createElement("div");col.style.flex="1";const pv=document.createElement("div");pv.className="css-prev";pv.style.background=bg;pv.addEventListener("click",()=>{const en=getEnabledPalette();const cs=generateCss(en);const vals={Gradient:cs.gradient,Noise:cs.noise,Mesh:`${cs.mesh}, ${en[0].hex}`};navigator.clipboard.writeText(`background: ${vals[label]};`);showCopied(label)});const lb=document.createElement("div");lb.className="css-prev-label";lb.textContent=label;col.append(pv,lb);pvr.appendChild(col)});sidebar.appendChild(pvr);
 const cdl=document.createElement("h3");cdl.textContent="CSS (tap to copy)";sidebar.appendChild(cdl);
-[["gradient",css.gradient],["noise",css.noise],["mesh",`${css.mesh}, ${palette[0].hex}`]].forEach(([label,value])=>{const b=document.createElement("div");b.className="css-block";b.textContent=`/* ${label} */\nbackground: ${value};`;b.addEventListener("click",()=>{navigator.clipboard.writeText(`background: ${value};`);showCopied(label)});sidebar.appendChild(b)})}
+[["gradient",css.gradient],["noise",css.noise],["mesh",`${css.mesh}, ${enabled[0].hex}`]].forEach(([label,value])=>{const b=document.createElement("div");b.className="css-block";b.textContent=`/* ${label} */\nbackground: ${value};`;b.addEventListener("click",()=>{navigator.clipboard.writeText(`background: ${value};`);showCopied(label)});sidebar.appendChild(b)})}
 
 // Mouse events
 let isDown=false;
