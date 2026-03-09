@@ -1,4 +1,4 @@
-import { App } from "@modelcontextprotocol/ext-apps";
+import { App, applyHostStyleVariables, applyDocumentTheme } from "@modelcontextprotocol/ext-apps";
 
 // --- Color math ---
 
@@ -137,43 +137,85 @@ const root = document.getElementById("root")!;
 
 const style = document.createElement("style");
 style.textContent = `
+:root {
+  --bg: #0e0e0e; --bg2: #111; --bg3: #1a1a1a; --bg-code: #151515;
+  --border: #222; --border2: #2a2a2a;
+  --text: #ddd; --text2: #888; --text3: #777; --text4: #666; --text5: #555; --text6: #999; --text-code: #aaa;
+  --swatch-border: rgba(255,255,255,0.1); --swatch-hover: rgba(255,255,255,0.4);
+  --btn-bg: #1a1a1a; --btn-border: #333; --btn-text: #aaa; --btn-hover-bg: #252525; --btn-hover-border: #444;
+  --toast-bg: #333; --toast-text: #fff;
+  --sel-border: rgba(255,255,255,0.7); --sel-bg: rgba(255,255,255,0.08);
+  --code-hover-border: #555; --code-hover-text: #ccc;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f5f5f5; --bg2: #eee; --bg3: #e4e4e4; --bg-code: #efefef;
+    --border: #d0d0d0; --border2: #c8c8c8;
+    --text: #1a1a1a; --text2: #555; --text3: #666; --text4: #777; --text5: #888; --text6: #555; --text-code: #555;
+    --swatch-border: rgba(0,0,0,0.12); --swatch-hover: rgba(0,0,0,0.3);
+    --btn-bg: #e4e4e4; --btn-border: #c8c8c8; --btn-text: #444; --btn-hover-bg: #d8d8d8; --btn-hover-border: #bbb;
+    --toast-bg: #333; --toast-text: #fff;
+    --sel-border: rgba(0,0,0,0.5); --sel-bg: rgba(0,0,0,0.06);
+    --code-hover-border: #aaa; --code-hover-text: #333;
+    color-scheme: light;
+  }
+}
+[data-theme="light"] {
+  --bg: #f5f5f5; --bg2: #eee; --bg3: #e4e4e4; --bg-code: #efefef;
+  --border: #d0d0d0; --border2: #c8c8c8;
+  --text: #1a1a1a; --text2: #555; --text3: #666; --text4: #777; --text5: #888; --text6: #555; --text-code: #555;
+  --swatch-border: rgba(0,0,0,0.12); --swatch-hover: rgba(0,0,0,0.3);
+  --btn-bg: #e4e4e4; --btn-border: #c8c8c8; --btn-text: #444; --btn-hover-bg: #d8d8d8; --btn-hover-border: #bbb;
+  --toast-bg: #333; --toast-text: #fff;
+  --sel-border: rgba(0,0,0,0.5); --sel-bg: rgba(0,0,0,0.06);
+  --code-hover-border: #aaa; --code-hover-text: #333;
+  color-scheme: light;
+}
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#0e0e0e; color:#ddd; }
-#root { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
-.status-bar { font-size:10px; color:#666; padding:4px 12px; background:#111; border-bottom:1px solid #222; flex-shrink:0; }
-.top { display:flex; gap:12px; flex:1; min-height:0; padding:12px; }
-.canvas-wrap { position:relative; flex:1; min-width:0; overflow:hidden; border-radius:8px; background:#1a1a1a; cursor:crosshair; }
-.canvas-wrap canvas { display:block; width:100%; height:100%; object-fit:contain; }
-.select-rect { position:absolute; border:2px solid rgba(255,255,255,0.7); background:rgba(255,255,255,0.08); pointer-events:none; border-radius:2px; }
-.sidebar { width:280px; flex-shrink:0; display:flex; flex-direction:column; gap:6px; overflow-y:auto; padding-bottom:12px; }
-h3 { font-size:11px; font-weight:600; color:#777; text-transform:uppercase; letter-spacing:0.5px; margin-top:4px; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:var(--bg); color:var(--text); }
+#root { display:flex; flex-direction:column; }
+.status-bar { font-size:10px; color:var(--text4); padding:4px 12px; background:var(--bg2); border-bottom:1px solid var(--border); }
+.top { display:flex; flex-direction:column; gap:10px; padding:10px; }
+.canvas-wrap { position:relative; overflow:hidden; border-radius:8px; background:var(--bg3); cursor:crosshair; display:flex; align-items:center; justify-content:center; min-height:120px; }
+.canvas-wrap canvas { display:block; max-width:100%; max-height:500px; }
+.select-rect { position:absolute; border:2px solid var(--sel-border); background:var(--sel-bg); pointer-events:none; border-radius:2px; }
+.sidebar { display:flex; flex-direction:column; gap:6px; }
+h3 { font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; margin-top:4px; }
 .palette { display:flex; gap:3px; flex-wrap:wrap; }
-.swatch { width:36px; height:36px; border-radius:6px; cursor:pointer; transition:transform 0.1s; position:relative; border:1px solid rgba(255,255,255,0.1); }
-.swatch:hover { transform:scale(1.15); z-index:1; border-color:rgba(255,255,255,0.4); }
-.swatch-hex { font-size:9px; color:#888; }
-.swatch-pct { font-size:9px; color:#555; }
-.texture-preview { width:100%; height:120px; border-radius:8px; border:1px solid #2a2a2a; overflow:hidden; }
+.swatch { width:36px; height:36px; border-radius:6px; cursor:pointer; transition:transform 0.1s; position:relative; border:1px solid var(--swatch-border); }
+.swatch:hover { transform:scale(1.15); z-index:1; border-color:var(--swatch-hover); }
+.swatch-hex { font-size:9px; color:var(--text2); }
+.swatch-pct { font-size:9px; color:var(--text5); }
+.texture-preview { width:100%; height:100px; border-radius:8px; border:1px solid var(--border2); overflow:hidden; }
 .texture-preview canvas { width:100%; height:100%; display:block; }
 .css-previews { display:flex; gap:4px; }
-.css-prev { flex:1; height:48px; border-radius:6px; border:1px solid #2a2a2a; }
-.css-prev-label { font-size:9px; color:#555; text-align:center; margin-top:1px; }
-.css-block { background:#151515; border:1px solid #2a2a2a; border-radius:6px; padding:6px 8px; font:10px/1.4 "SF Mono",monospace; color:#aaa; white-space:pre-wrap; word-break:break-all; cursor:pointer; max-height:48px; overflow:hidden; }
-.css-block:hover { border-color:#555; color:#ccc; }
-.empty-msg { color:#555; font-size:13px; text-align:center; padding:40px 12px; line-height:1.5; }
+.css-prev { flex:1; height:48px; border-radius:6px; border:1px solid var(--border2); }
+.css-prev-label { font-size:9px; color:var(--text5); text-align:center; margin-top:1px; }
+.css-block { background:var(--bg-code); border:1px solid var(--border2); border-radius:6px; padding:6px 8px; font:10px/1.4 "SF Mono",monospace; color:var(--text-code); white-space:pre-wrap; word-break:break-all; cursor:pointer; max-height:48px; overflow:hidden; }
+.css-block:hover { border-color:var(--code-hover-border); color:var(--code-hover-text); }
+.empty-msg { color:var(--text5); font-size:13px; text-align:center; padding:20px 12px; line-height:1.5; }
 .controls { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
-.controls label { font-size:10px; color:#666; }
+.controls label { font-size:10px; color:var(--text4); }
 .controls input[type=range] { width:70px; accent-color:#0078d6; }
-.num-display { font-size:10px; color:#999; min-width:14px; }
-.copied { position:fixed; top:12px; right:12px; background:#333; color:#fff; padding:4px 10px; border-radius:4px; font-size:11px; opacity:0; transition:opacity 0.2s; pointer-events:none; z-index:99; }
+.num-display { font-size:10px; color:var(--text6); min-width:14px; }
+.copied { position:fixed; top:12px; right:12px; background:var(--toast-bg); color:var(--toast-text); padding:4px 10px; border-radius:4px; font-size:11px; opacity:0; transition:opacity 0.2s; pointer-events:none; z-index:99; }
 .copied.show { opacity:1; }
-.header-bar { display:flex; align-items:center; justify-content:space-between; padding:6px 12px; border-bottom:1px solid #222; flex-shrink:0; }
+.header-bar { display:flex; align-items:center; justify-content:space-between; padding:6px 12px; border-bottom:1px solid var(--border); }
 .header-bar h1 { font-size:15px; font-weight:700; letter-spacing:0.5px; }
-.header-bar h1 span { color:#666; font-weight:400; font-size:11px; margin-left:4px; }
-.upload-btn { background:#1a1a1a; border:1px solid #333; color:#aaa; padding:5px 12px; border-radius:6px; font-size:11px; cursor:pointer; }
-.upload-btn:hover { background:#252525; border-color:#444; }
+.header-bar h1 span { color:var(--text4); font-weight:400; font-size:11px; margin-left:4px; }
+.upload-btn { background:var(--btn-bg); border:1px solid var(--btn-border); color:var(--btn-text); padding:5px 12px; border-radius:6px; font-size:11px; cursor:pointer; }
+.upload-btn:hover { background:var(--btn-hover-bg); border-color:var(--btn-hover-border); }
 .drop-overlay { position:absolute; inset:0; background:rgba(0,120,214,0.15); border:3px dashed #0078d6; display:none; align-items:center; justify-content:center; z-index:10; pointer-events:none; border-radius:8px; }
 .drop-overlay.active { display:flex; }
 .drop-overlay span { background:#0078d6; color:#fff; padding:6px 16px; border-radius:6px; font-size:12px; }
+@media (min-width:700px) and (min-height:500px) {
+  #root { height:100vh; overflow:hidden; }
+  .top { flex-direction:row; flex:1; min-height:0; padding:12px; gap:12px; }
+  .canvas-wrap { flex:1; min-width:0; min-height:0; }
+  .canvas-wrap canvas { max-height:none; }
+  .sidebar { width:280px; flex-shrink:0; overflow-y:auto; padding-bottom:12px; }
+}
 `;
 root.appendChild(style);
 
@@ -260,6 +302,7 @@ function loadImageFromFile(file: File) {
       const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
       ctx.drawImage(img, 0, 0, w, h);
       fullImageData = ctx.getImageData(0, 0, w, h);
+      fitCanvas();
       setStatus(`Image loaded (${w}x${h})`);
       showEmptyMsg("Click or drag on the image to pick a color texture");
     };
@@ -284,6 +327,31 @@ canvasWrap.addEventListener("drop", (e) => {
 let fullImageData: ImageData | null = null;
 let numColors = 6;
 let regionSize = 40;
+
+function fitCanvas() {
+  if (!fullImageData) return;
+  // In inline/vertical mode, let CSS max-width:100% handle it naturally.
+  // In wide/horizontal mode (media query active), compute explicit pixel fit.
+  const isWide = window.matchMedia("(min-width:700px) and (min-height:500px)").matches;
+  if (!isWide) {
+    canvas.style.width = "";
+    canvas.style.height = "";
+    return;
+  }
+  const rect = canvasWrap.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return;
+  const imgAsp = fullImageData.width / fullImageData.height;
+  const boxAsp = rect.width / rect.height;
+  if (imgAsp > boxAsp) {
+    canvas.style.width = `${rect.width}px`;
+    canvas.style.height = `${rect.width / imgAsp}px`;
+  } else {
+    canvas.style.height = `${rect.height}px`;
+    canvas.style.width = `${rect.height * imgAsp}px`;
+  }
+}
+
+window.addEventListener("resize", fitCanvas);
 
 /**
  * Load image from base64. Three strategies tried in order:
@@ -364,6 +432,7 @@ async function loadImage(base64: string) {
               const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
               ctx.drawImage(img, 0, 0, dw, dh);
               fullImageData = ctx.getImageData(0, 0, dw, dh);
+              fitCanvas();
               setStatus(`Ready (${dw}x${dh}) — decoded via Image fallback in ${(performance.now() - t0).toFixed(0)}ms`);
               showEmptyMsg("Click or drag on the image to pick a color texture");
               resolve();
@@ -396,6 +465,7 @@ async function loadImage(base64: string) {
     ctx.drawImage(bitmap, 0, 0, dw, dh);
     bitmap.close();
     fullImageData = ctx.getImageData(0, 0, dw, dh);
+    fitCanvas();
     setStatus(`Ready (${dw}x${dh}) — loaded in ${(performance.now() - t0).toFixed(0)}ms`);
     showEmptyMsg("Click or drag on the image to pick a color texture");
   }
@@ -589,24 +659,51 @@ canvasWrap.addEventListener("mousemove", (e) => {
 });
 window.addEventListener("mouseup", () => { isDown = false; });
 
-// --- MCP bridge ---
-// Strategy: prefer ontoolresult (server-compressed JPEG, small) over ontoolinput (raw, potentially huge).
-// ontoolinput fires first but with raw data. ontoolresult fires after server compresses.
-// We stash the raw input and wait briefly for ontoolresult. If it doesn't come, use raw input.
+// --- Theme ---
+function applyTheme(theme: "light" | "dark") {
+  document.documentElement.setAttribute("data-theme", theme);
+  applyDocumentTheme(theme);
+}
 
+// --- MCP bridge ---
 const app = new App({ name: "Gritt", version: "1.0.0" });
 
-app.ontoolinput = () => {
-  setStatus("Tool opened — ready for image upload");
-  showEmptyMsg("Click or drag an image onto the canvas to start picking color textures");
+let imageLoadedFromInput = false;
+
+app.ontoolinput = (params) => {
+  // Check if host injected image data directly in arguments
+  const b64 = params.arguments?.image_base64 as string | undefined;
+  if (b64) {
+    imageLoadedFromInput = true;
+    setStatus("Loading image from tool input...");
+    loadImage(b64);
+  } else {
+    setStatus("Tool opened — waiting for result...");
+  }
 };
 
-app.ontoolresult = () => {
-  setStatus("Tool result received");
+app.ontoolresult = (result) => {
+  // Skip if we already loaded from ontoolinput
+  if (imageLoadedFromInput) { imageLoadedFromInput = false; return; }
+  const sc = result.structuredContent as
+    | { image_base64?: string }
+    | undefined;
+  if (sc?.image_base64) {
+    setStatus("Loading image from server...");
+    loadImage(sc.image_base64);
+  } else {
+    setStatus("Ready — upload an image to start");
+    showEmptyMsg("Click or drag an image onto the canvas to start picking color textures");
+  }
 };
 
 app.ontoolcancelled = (params) => {
   setStatus(`Tool cancelled: ${params.reason ?? "unknown reason"}`);
+};
+
+app.onhostcontextchanged = (ctx) => {
+  if (ctx.theme) applyTheme(ctx.theme);
+  if (ctx.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
 };
 
 app.onteardown = async () => {
@@ -617,6 +714,11 @@ setStatus("Connecting to MCP host...");
 (async () => {
   try {
     await app.connect();
+    const ctx = app.getHostContext();
+    if (ctx?.theme) applyTheme(ctx.theme);
+    if (ctx?.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
+    // Request a square container from the host
+    await app.sendSizeChanged({ width: 600, height: 600 });
     setStatus("Connected — upload an image to start");
     showEmptyMsg("Click or drag an image onto the canvas to start picking color textures");
   } catch (err) {
